@@ -1,5 +1,6 @@
 package com.lincpay.chatbot.dto.Request;
 
+import com.lincpay.chatbot.util.AmountToWordsUtil;
 import lombok.Data;
 import java.math.BigDecimal;
 
@@ -22,6 +23,7 @@ public class GetPayinSidLimit {
  //         .append("🏢 *Company Name:* ").append(sidCompanyName != null ? escapeMarkdown(sidCompanyName) : "N/A").append("\n")
           .append("🔢 *SID:* ").append(escapeMarkdown(sid)).append("\n")
           .append("💰 *SID Limit:* ").append(sidLimit != null ? sidLimit.toPlainString() : "0.00").append("\n")
+                .append("\uD83D\uDCDC *InWordAmount: *").append(AmountToWordsUtil.convertToIndianCurrencyWords(sidLimit)).append("\n")
           .append("🔄 *Routing Type:* ").append(escapeMarkdown(routingType)).append("\n")
           .append("📊 *Priority:* ").append(prority != null ? prority : "N/A").append("\n")
           .append("🌍 *Domain:* ").append(escapeMarkdown(domain)).append("\n")

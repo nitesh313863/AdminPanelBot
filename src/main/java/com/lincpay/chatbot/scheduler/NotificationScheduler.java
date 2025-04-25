@@ -1,7 +1,5 @@
 package com.lincpay.chatbot.scheduler;
 
-import com.lincpay.chatbot.dto.Request.Notification10FailedTxnRequestDto;
-import com.lincpay.chatbot.dto.response.Notification10FailedTxnRequestDtoMapper;
 import com.lincpay.chatbot.dto.response.Response207TxnDataResponseDto;
 import com.lincpay.chatbot.entities.TelegramAdminGroup;
 import com.lincpay.chatbot.repository.Response207TxnDataRepo;
@@ -9,16 +7,13 @@ import com.lincpay.chatbot.serivce.TelegramGroupService;
 import com.lincpay.chatbot.serviceimp.TelegramBotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.util.*;
 
 @EnableScheduling

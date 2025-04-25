@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -105,6 +106,7 @@ public class TelegramNotificationController {
                 withdrawalResponseDto.setAmount(withdrawalRequest.getAmount());
                 withdrawalResponseDto.setCompanyName(withdrawalRequest.getCompanyName());
                 withdrawalResponseDto.setVirtualAccountType(withdrawalRequest.getVirtualAccountType());
+                withdrawalResponseDto.setCreateDateTime(withdrawalRequest.getCreateDateTime());
                 withdrawalResponseDto.setAmountInWord(AmountToWordsUtil.convertToIndianCurrencyWords(withdrawalRequest.getAmount()));
                 telegramBotService.sendMessage(chatIdAdmin, withdrawalResponseDto.toString());
                 // 🔍 Check if the admin is authenticated (token exists for this chatId)
@@ -225,59 +227,64 @@ public class TelegramNotificationController {
         }
     }
 
-    @PostMapping("/failed10TxnContinue")
-    public ResponseEntity<String> failed10TxnContinue(@RequestBody Notification10FailedTxnRequestDto notification10FailedTxnRequestDto) {
-        Logger logger = LoggerFactory.getLogger(this.getClass());
+//    @PostMapping("/failed10TxnContinue")
+//    public ResponseEntity<String> failed10TxnContinue(@RequestBody Notification10FailedTxnRequestDto notification10FailedTxnRequestDto, @RequestHeader("Content-Type") String contentType) {
+//        try {
+//            // Fetch all admin groups
+//            List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
+//
+//            // If no admin groups are found
+//            if (telegramAdminGroups.isEmpty()) {
+//                logger.warn("No admin groups found to send the alert for MID: {}", notification10FailedTxnRequestDto.getMid());
+//                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No admin groups configured.");
+//            }
+//
+//            // Send messages to all admin groups
+//            for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
+//                String chatIdAdmin = adminGroup.getGroupChatId();
+//                telegramBotService.sendMessage(chatIdAdmin, notification10FailedTxnRequestDto.toString());
+//            }
+//
+//            // Log success and return response
+//            logger.info("10 Failed Txn Alert sent for MID: {}", notification10FailedTxnRequestDto.getMid());
+//            return ResponseEntity.ok("Alert sent successfully.");
+//
+//        } catch (Exception e) {
+//            // Log error and return error response
+//            logger.error("Failed to send 10 failed txn alert for MID: {}", notification10FailedTxnRequestDto.getMid(), e);
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error occurred.");
+//        }
+//    }
 
-        try {
-            List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
-            if (telegramAdminGroups.isEmpty()) {
-                logger.warn("No admin groups found to send the alert for MID: {}", notification10FailedTxnRequestDto.getMid());
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No admin groups configured.");
-            }
 
-            for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
-                String chatIdAdmin = adminGroup.getGroupChatId();
-                telegramBotService.sendMessage(chatIdAdmin, notification10FailedTxnRequestDto.toString());
-            }
-
-            logger.info("10 Failed Txn Alert sent for MID: {}", notification10FailedTxnRequestDto.getMid());
-            return ResponseEntity.ok("Alert sent successfully.");
-
-        } catch (Exception e) {
-            logger.error("Failed to send 10 failed txn alert for MID: {}", notification10FailedTxnRequestDto.getMid(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error occurred.");
-        }
-    }
-
-    @PostMapping("/initiatedTxnAlert")
-    public ResponseEntity<String> initiatedTxnAlert(@RequestBody InitiatedTxnAlertRequestDto requestDto)
-    {
-
-        if (requestDto == null) {
-            logger.error("Received null requestDto.");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Request body is missing or malformed.");
-        }
-        try {
-            List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
-
-            if (telegramAdminGroups.isEmpty()) {
-                logger.warn("No admin groups found to send the alert for MID: {}", requestDto.getMid());
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No admin groups configured.");
-            }
-
-            for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
-                String chatIdAdmin = adminGroup.getGroupChatId();
-                telegramBotService.sendMessage(chatIdAdmin, requestDto.toString());
-            }
-
-            logger.info("initiated Txn Alert sent for MID: {}", requestDto.getMid());
-            return ResponseEntity.ok("Alert sent successfully.");
-        }
-        catch (Exception e)
-        {
-            logger.error("Failed to send initiated txn alert.",requestDto.toString(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error occurred.");
-        }
-    }
+//    @PostMapping("/initiatedTxnAlert")
+//    public ResponseEntity<String> initiatedTxnAlert(@RequestBody InitiatedTxnAlertRequestDto requestDto)
+//    {
+//
+//        if (requestDto == null) {
+//            logger.error("Received null requestDto.");
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Request body is missing or malformed.");
+//        }
+//        try {
+//            List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
+//
+//            if (telegramAdminGroups.isEmpty()) {
+//                logger.warn("No admin groups found to send the alert for MID: {}", requestDto.getMid());
+//                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No admin groups configured.");
+//            }
+//
+//            for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
+//                String chatIdAdmin = adminGroup.getGroupChatId();
+//                telegramBotService.sendMessage(chatIdAdmin, requestDto.toString());
+//            }
+//
+//            logger.info("initiated Txn Alert sent for MID: {}", requestDto.getMid());
+//            return ResponseEntity.ok("Alert sent successfully.");
+//        }
+//        catch (Exception e)
+//        {
+//            logger.error("Failed to send initiated txn alert.",requestDto.toString(), e);
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error occurred.");
+//        }
+//    }
 }

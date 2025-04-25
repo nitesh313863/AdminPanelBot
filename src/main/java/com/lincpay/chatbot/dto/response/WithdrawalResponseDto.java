@@ -20,7 +20,7 @@ public class WithdrawalResponseDto {
         sb.append("🏦 *MID:* ").append(escapeMarkdown(mid)).append("\n")
                 .append("🏢 *Company Name:* ").append(companyName != null ? escapeMarkdown(companyName) : "N/A").append("\n")
                 .append("💰 *Amount:* ").append(amount != null ? amount.toPlainString() : "0.00").append("\n")
-                .append("📅 *InWordAmount* ").append(escapeMarkdown(amountInWord)).append("\n")
+                .append("\uD83D\uDCDC *InWordAmount:* ").append(escapeMarkdown(amountInWord)).append("\n")
                 .append("🔄 *Virtual Account Type:* ")
                 .append((virtualAccountType != null && !virtualAccountType.isEmpty()) ? escapeMarkdown(virtualAccountType) : "N/A").append("\n")
                 .append("📅 *Create DateTime:* ").append(escapeMarkdown(createDateTime)).append("\n");
