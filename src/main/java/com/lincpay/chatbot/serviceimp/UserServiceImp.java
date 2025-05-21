@@ -87,7 +87,6 @@ public class UserServiceImp implements UserService {
     public ResponseEntity<ResponseModel> validUserData(UserLoginRequestDto dto) {
         try {
             Optional<User> optionalUser = userRepo.findByUsername(dto.getUsername());
-
             if (!optionalUser.isPresent()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ResponseModel<>("Invalid username", null, HttpStatus.UNAUTHORIZED.value()));
@@ -97,11 +96,15 @@ public class UserServiceImp implements UserService {
 
             // Ideally, you should hash passwords and compare hashes
             if (!user.getPassword().equals(dto.getPassword())) {
+                Map<String,Object> map = new HashMap<>();
+                map.put("userName",optionalUser.get().getUsername());
+                map.put("userId",optionalUser.get().getId());
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ResponseModel<>("Invalid password", null, HttpStatus.UNAUTHORIZED.value()));
+
             }
 
-            return ResponseEntity.ok(new ResponseModel<>("Login successful", "success", HttpStatus.OK.value()));
+            return ResponseEntity.ok(new ResponseModel<>("Login successful", "success", HttpStatus.OK.value(),optionalUser.get().getUsername()));
         } catch (Exception e) {
             e.printStackTrace();
             logger.error("Error validating user: {}", e.getMessage(), e);

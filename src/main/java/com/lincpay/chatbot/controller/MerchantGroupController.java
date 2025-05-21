@@ -163,7 +163,7 @@ public class MerchantGroupController {
 
                 // Store in database
                 merchantGroupChatAdminPanelService.adminReplyStoreDocumentDb(
-                        chatId, file, "photo", contentType, originalFileName);
+                        chatId, file, "photo", contentType, originalFileName,caption);
 
                 // Prepare response
                 String mimeType = contentType != null ? contentType : "image/jpeg";
@@ -198,7 +198,7 @@ public class MerchantGroupController {
 
                 // Store in database
                 merchantGroupChatAdminPanelService.adminReplyStoreDocumentDb(
-                        chatId, file, "document", contentType, originalFileName);
+                        chatId, file, "document", contentType, originalFileName,caption);
 
                 // Prepare response
                 String mimeType = contentType != null ? contentType : "application/octet-stream";

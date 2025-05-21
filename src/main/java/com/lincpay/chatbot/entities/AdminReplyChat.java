@@ -46,5 +46,6 @@ public class AdminReplyChat {
 
     @Column(name = "content_type")
     private String contentType;
+    private String caption;
 
 }

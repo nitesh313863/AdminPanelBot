@@ -16,5 +16,5 @@ public interface MerchantGroupChatAdminPanelService {
 
     ResponseEntity<ResponseModel> getAdminReplyChat(String chatId);
 
-    void adminReplyStoreDocumentDb(String chatId, MultipartFile file, String photos, String contentType,String originalFileName ) throws IOException;
+    void adminReplyStoreDocumentDb(String chatId, MultipartFile file, String photos, String contentType,String originalFileName ,String caption ) throws IOException;
 }

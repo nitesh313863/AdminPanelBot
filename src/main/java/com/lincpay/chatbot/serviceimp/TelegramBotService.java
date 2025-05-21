@@ -240,18 +240,16 @@ public class TelegramBotService extends TelegramLongPollingBot {
         // If adminGroupIds doesn't contain the chatId, refresh it from DB
         if (!adminGroupIds.contains(chatId)) {
             List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
+			adminGroupIds.clear();
             for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
                 adminGroupIds.add(adminGroup.getGroupChatId());
             }
         }
-	    // Check if the message is from Admin Group, Merchant Group, or Private Chat
-	    if (adminGroupIds.contains(chatId)) {
-//	        logger.info("Message received in Admin Group. Processing...");
-	        handleAdminGroupMessage(chatId, receivedText, userName, userId, user, msgId);
-	    }
-// Refresh merchant group IDs if not loaded yet
+
+		// Refresh merchant group IDs if not loaded yet
 		if (!merchantGroupIds.contains(chatId)) {
 			List<TelegramMerchantGroup> telegramMerchantGroups = telegramGroupService.getAllMerchantGroups();
+			merchantGroupIds.clear();
 			for (TelegramMerchantGroup merchantGroup : telegramMerchantGroups) {
 				merchantGroupIds.add(merchantGroup.getGroupChatId());
 			}
@@ -301,31 +299,33 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
 //			 Handle Document Message (PDF)
 			else if (message.hasDocument()) {
-				storeTelegramPdf(message);
+				storeTelegramDocument(message);
 			}
 
 
 	}
-	private void storeTelegramPdf(Message message) {
+	private void storeTelegramDocument(Message message) {
 		Document document = message.getDocument();
 		String fileId = document.getFileId();
 		String fileName = document.getFileName();
 		String mimeType = document.getMimeType();
-		Integer fileSize= document.getFileSize();
+		Integer fileSize = document.getFileSize();
+		String caption = message.getCaption();
 
-		if (fileName != null && mimeType != null && mimeType.startsWith("application/")) {
+		if (fileName != null && fileId != null) {
 			MerchantChat merchantChat = new MerchantChat();
 			merchantChat.setDocFileId(fileId);
 			merchantChat.setFileName(fileName);
-			merchantChat.setFileType(mimeType);
+			merchantChat.setFileType(mimeType != null ? mimeType : "application/octet-stream");
 			merchantChat.setMsgId(message.getMessageId());
 			merchantChat.setUserId(message.getFrom().getId());
 			merchantChat.setChatId(String.valueOf(message.getChatId()));
 			merchantChat.setUserName(message.getFrom().getUserName());
 			merchantChat.setMessageDate(LocalDateTime.now());
 			merchantChat.setFileSize(fileSize);
+			merchantChat.setCaption(caption);
 
-			// Step 1: Get the file path from Telegram
+			// Step 1: Get file path from Telegram
 			String filePath = getFilePathFromTelegram(fileId);
 			if (filePath != null) {
 				String baseDirectory = uploadDirectory1;
@@ -337,25 +337,24 @@ public class TelegramBotService extends TelegramLongPollingBot {
 				merchantChat.setFileData(fileData);
 				merchantChat.setDocFilePath(resolvedPath.toString());
 
-				// ✅ Step 3: Write file to disk
+				// Step 3: Write file to disk
 				try {
-					Files.createDirectories(resolvedPath.getParent()); // Ensure directory exists
+					Files.createDirectories(resolvedPath.getParent());
 					Files.write(resolvedPath, fileData);
-					System.out.println("✅ File written to disk at: " + resolvedPath);
+					logger.info("✅ File written to disk at: " + resolvedPath);
 				} catch (IOException e) {
-					System.err.println("❌ Failed to write file to disk: " + e.getMessage());
+					logger.error("❌ Failed to write file to disk: " + e.getMessage());
 					e.printStackTrace();
 				}
 			}
 
 			// Step 4: Save to DB
-
 			merchantChatRepo.save(merchantChat);
-			// Send via WebSocket
+
+			// Step 5: Send via WebSocket
 			webSocketSenderService.sendMerchantGroupMessage(merchantChat);
 		}
 	}
-
 
 
 	private String getFilePathFromTelegram(String fileId) {

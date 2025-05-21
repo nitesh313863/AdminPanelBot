@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +35,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
 
     @Override
     @Transactional(readOnly = true)
+    @Async
     public ResponseEntity<ResponseModel> getMerchantChatsByChatId(String chatId) {
         try {
             // Validate the chatId
@@ -45,7 +47,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
 
             // Get current time and calculate 24 hours back
             LocalDateTime end = LocalDateTime.now();
-            LocalDateTime start = end.minusHours(24); // Default to last 24 hours
+            LocalDateTime start = end.minusHours(12); // Default to last 24 hours
 
             // Fetch all messages from the last 24 hours (no pagination)
             List<MerchantChat> chats = merchantChatRepo
@@ -76,6 +78,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
                             chatMap.put("messageType", "photo");  // Indicating that this is a photo message
                             chatMap.put("msgType","photo");
                             chatMap.put("senderType","merchant");
+                            chatMap.put("caption", chat.getCaption());
 
                         } else if (chat.getMsgText() != null && !chat.getMsgText().isEmpty()) {
                             // If photo is not available, return the message text
@@ -93,6 +96,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
                             chatMap.put("senderType","merchant");
                             chatMap.put("fileName",chat.getFileName());
                             chatMap.put("fileSize",chat.getFileSize());
+                            chatMap.put("caption", chat.getCaption());
                         }
                         return chatMap;
                     })
@@ -132,10 +136,11 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
 
     @Override
     @Transactional
+    @Async
     public ResponseEntity<ResponseModel> getAdminReplyChat(String chatId) {
         try {
             LocalDateTime endDate = LocalDateTime.now();
-            LocalDateTime startDate = endDate.minusHours(24);
+            LocalDateTime startDate = endDate.minusHours(12);
 
             List<AdminReplyChat> chatList = adminReplyChatRepo
                     .findByChatIdAndMessageDateBetweenOrderByMessageDateDesc(chatId, startDate, endDate);
@@ -168,6 +173,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
                             chatMap.put("msgType","photo");
                             chatMap.put("senderType","admin");
                             chatMap.put("id", chat.getId());
+                            chatMap.put("caption", chat.getCaption());
                             if (chat.getFileData() != null) {
                                 // Encode image file to base64 if it's available
                                 String base64Image = "data:" + chat.getContentType() + ";base64," +
@@ -186,7 +192,10 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
                             chatMap.put("msgId", chat.getId());
                             chatMap.put("fileData", base64Data);
                             chatMap.put("messageType", "document");  // Document message
+                            chatMap.put("senderType", "admin");
                             chatMap.put("id", chat.getId());
+                            chatMap.put("msgType","document");
+                            chatMap.put("caption", chat.getCaption());
                         }
 
                         return chatMap;
@@ -206,7 +215,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
 
 
     @Override
-    public void adminReplyStoreDocumentDb(String chatId, MultipartFile file, String type, String contentType, String fileName) throws IOException {
+    public void adminReplyStoreDocumentDb(String chatId, MultipartFile file, String type, String contentType, String fileName ,String caption) throws IOException {
         // Convert the uploaded file to byte[] (binary data)
         byte[] fileBytes = file.getBytes(); // This is the correct byte array for binary storage
 
@@ -216,6 +225,7 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
         adminReplyChat.setFileType(type);  // e.g., "pdf"
         adminReplyChat.setContentType(contentType); // e.g., "application/pdf"
         adminReplyChat.setMessageDate(LocalDateTime.now());
+        adminReplyChat.setCaption(caption);
 
         // Set the byte array (file data) into the entity
         adminReplyChat.setFileData(fileBytes);

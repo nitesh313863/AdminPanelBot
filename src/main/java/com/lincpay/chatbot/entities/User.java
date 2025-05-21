@@ -25,6 +25,7 @@ public class User {
     @Column(unique = true)
     private String email;
 
+
     private String phone;
 
     // ✅ Correct Many-to-Many relationship with join table

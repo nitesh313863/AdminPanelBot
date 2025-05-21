@@ -295,7 +295,7 @@ public class TelegramNotificationController {
         System.out.println(paymentStatusNotificationRequestDto);
         try {
             TelegramMerchantGroup telegramMerchantGroup =telegramGroupService.getMerchantGroupChatIdByMid(paymentStatusNotificationRequestDto.getMid());
-            telegramBotService.sendMessage("-4628997659", paymentStatusNotificationRequestDto.toString());
+            telegramBotService.sendMessage(telegramMerchantGroup.getGroupChatId(), paymentStatusNotificationRequestDto.toString());
         }
         catch (Exception e) {
             logger.error("Internal Server Error", e);

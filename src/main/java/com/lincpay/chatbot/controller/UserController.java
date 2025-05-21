@@ -20,13 +20,11 @@ public class UserController {
 
     @PostMapping("/addUser")
     public ResponseEntity<ResponseModel> addUser(@RequestBody UserRequestDto dto) {
-        System.out.println(dto.toString());
         return userService.addUser(dto);
     }
 
     @GetMapping("groups")
     public ResponseEntity<ResponseModel<List<TelegramMerchantGroup>>> getGroupsForLoggedInUser(@RequestParam String username) {
-
         return userService.getAllowedGroupsByUsername(username);
     }
 
