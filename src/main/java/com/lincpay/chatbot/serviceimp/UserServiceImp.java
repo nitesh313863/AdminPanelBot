@@ -99,9 +99,10 @@ public class UserServiceImp implements UserService {
             if (!user.getPassword().equals(dto.getPassword())) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ResponseModel<>("Invalid password", null, HttpStatus.UNAUTHORIZED.value()));
+
             }
 
-            return ResponseEntity.ok(new ResponseModel<>("Login successful", "success", HttpStatus.OK.value()));
+            return ResponseEntity.ok(new ResponseModel<>("Login successful", "success", HttpStatus.OK.value(),optionalUser.get().getUsername()));
         } catch (Exception e) {
             e.printStackTrace();
             logger.error("Error validating user: {}", e.getMessage(), e);

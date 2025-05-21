@@ -240,18 +240,16 @@ public class TelegramBotService extends TelegramLongPollingBot {
         // If adminGroupIds doesn't contain the chatId, refresh it from DB
         if (!adminGroupIds.contains(chatId)) {
             List<TelegramAdminGroup> telegramAdminGroups = telegramGroupService.getAllAdminGroupId();
+			adminGroupIds.clear();
             for (TelegramAdminGroup adminGroup : telegramAdminGroups) {
                 adminGroupIds.add(adminGroup.getGroupChatId());
             }
         }
-	    // Check if the message is from Admin Group, Merchant Group, or Private Chat
-	    if (adminGroupIds.contains(chatId)) {
-//	        logger.info("Message received in Admin Group. Processing...");
-	        handleAdminGroupMessage(chatId, receivedText, userName, userId, user, msgId);
-	    }
-// Refresh merchant group IDs if not loaded yet
+
+		// Refresh merchant group IDs if not loaded yet
 		if (!merchantGroupIds.contains(chatId)) {
 			List<TelegramMerchantGroup> telegramMerchantGroups = telegramGroupService.getAllMerchantGroups();
+			merchantGroupIds.clear();
 			for (TelegramMerchantGroup merchantGroup : telegramMerchantGroups) {
 				merchantGroupIds.add(merchantGroup.getGroupChatId());
 			}

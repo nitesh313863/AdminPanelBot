@@ -186,7 +186,9 @@ public class MerchantGroupChatAdminPanelServiceImp implements MerchantGroupChatA
                             chatMap.put("msgId", chat.getId());
                             chatMap.put("fileData", base64Data);
                             chatMap.put("messageType", "document");  // Document message
+                            chatMap.put("senderType", "admin");
                             chatMap.put("id", chat.getId());
+                            chatMap.put("msgType","document");
                         }
 
                         return chatMap;
