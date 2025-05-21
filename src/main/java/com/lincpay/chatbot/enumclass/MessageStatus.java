@@ -1,4 +1,5 @@
 package com.lincpay.chatbot.enumclass;
 
-public class MessageStatus {
+public enum MessageStatus {
+    PENDING, DELIVERED, READ, FAILED
 }

@@ -1,10 +1,17 @@
 package com.lincpay.chatbot.serviceimp;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.lincpay.chatbot.dto.Request.MerchantGroupEditRequestDto;
+import com.lincpay.chatbot.entities.MerchantChat;
 import com.lincpay.chatbot.entities.TelegramAdminGroup;
 import com.lincpay.chatbot.entities.TelegramGroupMessage;
+import com.lincpay.chatbot.repository.MerchantChatRepo;
 import com.lincpay.chatbot.repository.TelegramAdminGroupRepo;
 import com.lincpay.chatbot.repository.TelegramGroupMessageRepo;
 import com.lincpay.chatbot.repository.TelegramMerchantGroupRepo;
@@ -36,6 +43,7 @@ public class TelegramGroupServiceImp implements TelegramGroupService {
     
     @Autowired
     TelegramAdminGroupRepo telegramAdminGroupRepo;
+
 
     @Override
     public ResponseEntity<ResponseModel> addMerchantGroup(TelegramMerchantGroup telegramMerchantGroup) {
@@ -348,6 +356,28 @@ public class TelegramGroupServiceImp implements TelegramGroupService {
                             ApplicationConstant.INTERNALSERVER_ERROR,
                             null
                     ));
+        }
+    }
+
+    @Override
+    public List<TelegramMerchantGroup> getAllMerchantGroups() {
+        return telegramGroupRepo.findAll();
+    }
+
+    public TelegramMerchantGroup getMerchantGroupChatIdByMid(String mid) {
+        try {
+            TelegramMerchantGroup group = telegramGroupRepo.findByMid(mid);
+            if (group != null) {
+                logger.info("Group '{}' found for MID: {}",mid);
+                return group;
+            } else {
+                logger.warn("No group found for MID: {}",mid);
+                return null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.error("Internal Server Error",e);
+            return null;
         }
     }
 

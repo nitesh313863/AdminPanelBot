@@ -28,4 +28,7 @@ public interface TelegramGroupService {
 	ResponseEntity<ResponseModel<TelegramMerchantGroup>> fetchMerchantGroupByMid(String mid);
 
 	ResponseEntity<ResponseModel> editmerchantGroup(String mid, @Valid MerchantGroupEditRequestDto group);
+
+	List<TelegramMerchantGroup> getAllMerchantGroups();
+	public TelegramMerchantGroup getMerchantGroupChatIdByMid(String mid);
 }

@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.lincpay.chatbot.dto.Request.*;
 import com.lincpay.chatbot.dto.response.WithdrawalResponseDto;
+import com.lincpay.chatbot.entities.TelegramMerchantGroup;
 import com.lincpay.chatbot.util.AmountToWordsUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -287,4 +288,17 @@ public class TelegramNotificationController {
 //            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error occurred.");
 //        }
 //    }
+
+    @PostMapping("/notification/paymentStatus")
+    public void paymentStatusNotification(@RequestBody PaymentStatusNotificationRequestDto paymentStatusNotificationRequestDto)
+    {
+        System.out.println(paymentStatusNotificationRequestDto);
+        try {
+            TelegramMerchantGroup telegramMerchantGroup =telegramGroupService.getMerchantGroupChatIdByMid(paymentStatusNotificationRequestDto.getMid());
+            telegramBotService.sendMessage("-4628997659", paymentStatusNotificationRequestDto.toString());
+        }
+        catch (Exception e) {
+            logger.error("Internal Server Error", e);
+        }
+    }
 }

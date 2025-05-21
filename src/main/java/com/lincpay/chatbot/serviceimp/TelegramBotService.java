@@ -1,16 +1,22 @@
 package com.lincpay.chatbot.serviceimp;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lincpay.chatbot.dto.Request.WithdrawalRequestReceive;
 import com.lincpay.chatbot.dto.response.FetchMidDataResponse;
 import com.lincpay.chatbot.dto.response.PayinSidLimtReciveRespose;
 import com.lincpay.chatbot.dto.response.ResponseModel;
+import com.lincpay.chatbot.entities.MerchantChat;
 import com.lincpay.chatbot.entities.TelegramAdminGroup;
 import com.lincpay.chatbot.entities.TelegramMerchantGroup;
 import com.lincpay.chatbot.entities.WithdrawalRequestAction;
+import com.lincpay.chatbot.repository.MerchantChatRepo;
 import com.lincpay.chatbot.repository.WithdrawalRequestActionRepo;
 import com.lincpay.chatbot.serivce.TelegramGroupService;
 import com.lincpay.chatbot.serivce.UserValidateService;
+import com.lincpay.chatbot.util.MultipartFileResource;
 import lombok.extern.slf4j.Slf4j;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,9 +24,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -37,7 +49,13 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 
 import javax.annotation.PostConstruct;
+import javax.transaction.Transactional;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.NumberFormat;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -50,6 +68,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
 	@Value("${telegram.bot.username}")
 	private String botUsername;
+
+
+	@Autowired
+	WebSocketSenderService webSocketSenderService;
+
 
 	@Autowired
 	private TelegramGroupService telegramGroupService;
@@ -65,10 +88,17 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
 	@Autowired
 	WithdrawalRequestActionRepo withdrawalRequestActionRepo;
-	
-	
-	@Autowired 
+
+	@Autowired
+	MerchantChatRepo merchantChatRepo;
+
+
+	@Autowired
 	GroupMemberServiceImp groupMemberServiceImp;
+
+	@Value("${telegram.document.upload}")
+	private String uploadDirectory1;
+
 
 	private static final Logger logger = LoggerFactory.getLogger(TelegramBotService.class);
 
@@ -88,7 +118,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	private Set<String> adminGroupIds = new HashSet<>();
 	private Set<String> merchantGroupIds = new HashSet<>();
 	private Map<String, String> midBusinessNameMap = new HashMap<>();
-	
+
 //    private static final String PYTHON_EXECUTABLE = "python"; // Use 'python' for Windows
 //    private static final String API_ID = "26395329"; // Get this from my.telegram.org
 //    private static final String API_HASH = "780f9dd42272080669cd02ad12769e09"; // Get this from my.telegram.org
@@ -109,18 +139,91 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	@Override
 	@Async
 	public void onUpdateReceived(Update update) {
-	    try {
-	        if (update.hasCallbackQuery()) {
-	            logger.info("Processing callback query...");
-	            handleCallbackQuery(update.getCallbackQuery());
-	        } else if (update.hasMessage() && update.getMessage().hasText()) {
-	            logger.info("Processing incoming message...");
-	            handleMessage(update.getMessage());
-	        }
-	    } catch (Exception e) {
-	        logger.error("Error processing update", e);
-	    }
+		System.out.println("onUpdateReceived: " + update);
+		try {
+			if (update.hasCallbackQuery()) {
+				logger.info("Processing callback query...");
+				handleCallbackQuery(update.getCallbackQuery());
+			} else if (update.hasMessage()) {
+				if (update.getMessage().hasText()) {
+					logger.info("Processing incoming text message...");
+					handleMessage(update.getMessage());
+				} else if (update.getMessage().hasPhoto()) {
+					logger.info("Processing incoming photo...");
+					handleMessage(update.getMessage());
+				} else if (update.getMessage().hasDocument()) {
+					logger.info("Processing incoming document...");
+					handleMessage(update.getMessage());
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Error processing update", e);
+		}
 	}
+
+
+	public String getFilePath(String fileId, String botToken) {
+		String url = "https://api.telegram.org/bot" + botToken + "/getFile?file_id=" + fileId;
+		RestTemplate restTemplate = new RestTemplate();
+		ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+		JSONObject jsonObject = new JSONObject(response.getBody());
+		return jsonObject.getJSONObject("result").getString("file_path");
+	}
+	public byte[] downloadTelegramFile(String filePath, String botToken) throws IOException {
+		String fileUrl = "https://api.telegram.org/file/bot" + botToken + "/" + filePath;
+		RestTemplate restTemplate = new RestTemplate();
+		return restTemplate.getForObject(fileUrl, byte[].class);
+	}
+	@Transactional
+	public void storeTelegramPhoto(Message message) {
+		String botT = botToken;
+
+		try {
+			// Get the list of photos and pick the largest one (highest resolution)
+			List<PhotoSize> photos = message.getPhoto();
+			if (photos == null || photos.isEmpty()) {
+				// Handle case when no photos are attached
+				logger.warn("No photos found in the message");
+				return;
+			}
+			PhotoSize largestPhoto = photos.get(photos.size() - 1); // Highest resolution photo
+			String fileId = largestPhoto.getFileId();
+
+			// Get the file path for the photo
+			String filePath = getFilePath(fileId, botT);
+			byte[] photoBytes = downloadTelegramFile(filePath, botT);
+
+			// Create a new MerchantChat entity and set its properties
+			MerchantChat chat = new MerchantChat();
+			chat.setChatId(String.valueOf(message.getChatId()));
+			chat.setUserName(message.getFrom().getUserName());
+			chat.setUserId(message.getFrom().getId());
+			chat.setMsgId(message.getMessageId());
+			chat.setMessageDate(LocalDateTime.now());
+
+			// Set caption if available
+			if (message.getCaption() != null) {
+				chat.setCaption(message.getCaption());
+			}
+
+			// Store the photo (as byte array) and related file information
+			chat.setPhoto(photoBytes);                      // Byte array for photo
+			chat.setPhotoFileId(fileId);                    // Store the file_id for later reference
+			chat.setFileType("image/jpeg");                 // Optional: could detect dynamically
+			chat.setMsgText(null);                          // No text in this case (since it's an image)
+
+			// Save the chat entity to the database
+			webSocketSenderService.sendMerchantGroupMessage(chat);
+			merchantChatRepo.save(chat);
+
+		} catch (Exception e) {
+			// Log the exception for better debugging
+			e.printStackTrace();
+			System.err.println("Error while storing telegram photo: " + e.getMessage());
+		}
+	}
+
 
 	// Handles incoming messages and identifies the type of chat
 	private void handleMessage(Message message) {
@@ -145,16 +248,155 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	    if (adminGroupIds.contains(chatId)) {
 //	        logger.info("Message received in Admin Group. Processing...");
 	        handleAdminGroupMessage(chatId, receivedText, userName, userId, user, msgId);
-	    } else if (merchantGroupIds.contains(chatId)) {
-	        logger.warn("Message received in Merchant Group. Access denied.");
-	        sendMessage(chatId, "❌ Only *admin* has access. This functionality is restricted for merchants.");
-	    } else if (message.getChat().isUserChat()) {
-//	        logger.info("Message received in Private Chat. Processing...");
-	        handlePrivateChatMessage(chatId, receivedText, userName, userId, user, msgId);
-	    } else {
-	        logger.warn("Message received in an unknown or unregistered chat. Access denied.");
-	        sendMessage(chatId, "❌ Access denied. You don't have the necessary permissions. Chat ID: " + chatId);
 	    }
+// Refresh merchant group IDs if not loaded yet
+		if (!merchantGroupIds.contains(chatId)) {
+			List<TelegramMerchantGroup> telegramMerchantGroups = telegramGroupService.getAllMerchantGroups();
+			for (TelegramMerchantGroup merchantGroup : telegramMerchantGroups) {
+				merchantGroupIds.add(merchantGroup.getGroupChatId());
+			}
+		}
+
+// Now check AFTER refreshing
+		if (adminGroupIds.contains(chatId)) {
+			handleAdminGroupMessage(chatId, receivedText, userName, userId, user, msgId);
+		} else if (merchantGroupIds.contains(chatId)) {
+			logger.warn("Message received in Merchant Group. Access denied.");
+			handleMerchantChat(chatId,userId,userName,msgId,receivedText,message);
+		} else if (message.getChat().isUserChat()) {
+			handlePrivateChatMessage(chatId, receivedText, userName, userId, user, msgId);
+		} else {
+			logger.warn("Message received in an unknown or unregistered chat. Access denied.");
+			sendMessage(chatId, "❌ Access denied. You don't have the necessary permissions. Chat ID: " + chatId);
+		}
+
+	}
+
+	private void handleMerchantChat(String chatId, Long userId, String userName, Integer msgId, String text_msg, Message message) {
+			// Handle Text Message
+			if (text_msg != null && !text_msg.isEmpty()) {
+				if (text_msg.startsWith("/")) {
+					sendMessage(chatId, "Message received in Merchant Group. ❌  Access denied.");
+				}
+				else {
+					MerchantChat merchantChat = new MerchantChat();
+					merchantChat.setMsgText(text_msg);
+					merchantChat.setMsgId(msgId);
+					merchantChat.setUserId(userId);
+					merchantChat.setChatId(chatId);
+					merchantChat.setUserName(userName);
+					merchantChat.setMessageDate(LocalDateTime.now());  // Set current timestamp
+					merchantChatRepo.save(merchantChat);
+
+					// Send via WebSocket
+					webSocketSenderService.sendMerchantGroupMessage(merchantChat);
+				}
+
+			}
+
+			// Handle Photo Message
+			else if (message.hasPhoto()) {
+				storeTelegramPhoto(message);
+			}
+
+//			 Handle Document Message (PDF)
+			else if (message.hasDocument()) {
+				storeTelegramPdf(message);
+			}
+
+
+	}
+	private void storeTelegramPdf(Message message) {
+		Document document = message.getDocument();
+		String fileId = document.getFileId();
+		String fileName = document.getFileName();
+		String mimeType = document.getMimeType();
+		Integer fileSize= document.getFileSize();
+
+		if (fileName != null && mimeType != null && mimeType.startsWith("application/")) {
+			MerchantChat merchantChat = new MerchantChat();
+			merchantChat.setDocFileId(fileId);
+			merchantChat.setFileName(fileName);
+			merchantChat.setFileType(mimeType);
+			merchantChat.setMsgId(message.getMessageId());
+			merchantChat.setUserId(message.getFrom().getId());
+			merchantChat.setChatId(String.valueOf(message.getChatId()));
+			merchantChat.setUserName(message.getFrom().getUserName());
+			merchantChat.setMessageDate(LocalDateTime.now());
+			merchantChat.setFileSize(fileSize);
+
+			// Step 1: Get the file path from Telegram
+			String filePath = getFilePathFromTelegram(fileId);
+			if (filePath != null) {
+				String baseDirectory = uploadDirectory1;
+				String actualFileName = filePath.substring(filePath.lastIndexOf("/") + 1);
+				Path resolvedPath = Paths.get(baseDirectory, actualFileName).normalize();
+
+				// Step 2: Download file
+				byte[] fileData = downloadFileDataFromTelegram(filePath);
+				merchantChat.setFileData(fileData);
+				merchantChat.setDocFilePath(resolvedPath.toString());
+
+				// ✅ Step 3: Write file to disk
+				try {
+					Files.createDirectories(resolvedPath.getParent()); // Ensure directory exists
+					Files.write(resolvedPath, fileData);
+					System.out.println("✅ File written to disk at: " + resolvedPath);
+				} catch (IOException e) {
+					System.err.println("❌ Failed to write file to disk: " + e.getMessage());
+					e.printStackTrace();
+				}
+			}
+
+			// Step 4: Save to DB
+
+			merchantChatRepo.save(merchantChat);
+			// Send via WebSocket
+			webSocketSenderService.sendMerchantGroupMessage(merchantChat);
+		}
+	}
+
+
+
+	private String getFilePathFromTelegram(String fileId) {
+		String url = "https://api.telegram.org/bot" + botToken + "/getFile?file_id=" + fileId;
+		RestTemplate restTemplate = new RestTemplate();
+		try {
+			ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+			if (response.getStatusCode() == HttpStatus.OK) {
+				return extractFilePathFromResponse(response.getBody());
+			} else {
+				logger.warn("Telegram API request failed with status: " + response.getStatusCode());
+				return null;
+			}
+		} catch (HttpClientErrorException e) {
+			logger.warn("Telegram returned error: " + e.getResponseBodyAsString(), e);
+			return null;
+		}
+	}
+
+	private String extractFilePathFromResponse(String responseBody) {
+		try {
+			ObjectMapper mapper = new ObjectMapper();
+			JsonNode root = mapper.readTree(responseBody);
+			if (root.path("ok").asBoolean(false)) {
+				return root.path("result").path("file_path").asText(null);
+			}
+		} catch (Exception e) {
+			logger.error("Error extracting file path from response: " + responseBody, e);
+		}
+		return null;
+	}
+
+	private byte[] downloadFileDataFromTelegram(String filePath) {
+		String fileUrl = "https://api.telegram.org/file/bot" + botToken + "/" + filePath;
+		RestTemplate restTemplate = new RestTemplate();
+		try {
+			return restTemplate.getForObject(fileUrl, byte[].class);
+		} catch (HttpClientErrorException e) {
+			logger.warn("Failed to download file: " + e.getResponseBodyAsString(), e);
+			return null;
+		}
 	}
 
 	// Handles callback queries received from button interactions
@@ -184,7 +426,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	    // ✅ Handle approval action
 	    if (data.startsWith("approve_")) {
 	        String withdrawalId = data.replace("approve_", "");
-	        
+
 	        if (withdrawalId.isEmpty()) {
 	            sendMessage(chatId, "⚠️ Invalid withdrawal ID provided.");
 	            return;
@@ -199,7 +441,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	    // ✅ Handle rejection action
 	    } else if (data.startsWith("reject_")) {
 	        String withdrawalId = data.replace("reject_", "");
-	        
+
 	        if (withdrawalId.isEmpty()) {
 	            sendMessage(chatId, "⚠️ Invalid withdrawal ID provided.");
 	            return;
@@ -213,7 +455,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	    // ✅ Handle payout balance request for selected MID
 	    } else if (data.startsWith("payoutBalance")) {
 	        String selectedMid = data.replace("payoutBalance", "");
-	        
+
 	        if (selectedMid.isEmpty()) {
 	            sendMessage(chatId, "⚠️ Invalid MID provided for payout balance.");
 	            return;
@@ -226,7 +468,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	    // ✅ Handle pay-in limit for selected MID
 	    } else if (data.startsWith("payin_limit")) {
 	        String selectedMid = data.replace("payin_limit", "");
-	        
+
 	        if (selectedMid.isEmpty()) {
 	            sendMessage(chatId, "⚠️ Invalid MID provided for pay-in limit.");
 	            return;
@@ -603,7 +845,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	private void loginByEmailAndPassPhase(String chatId, String email, String passPhase, String firstName, String lastName) {
 	    try {
 	        logger.info("Processing login for email: {} in chatId: {}", email, chatId);
-	        
+
 	        // ✅ Stop awaiting email after receiving credentials
 	        awaitingEmail.put(chatId, false);
 
@@ -662,7 +904,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	public void initCommands() {
 	    try {
 	  //      logger.info("Initializing bot commands...");
-	        
+
 	        botCommands.clear();
 	        botCommands.add(new BotCommand("start", "Starts the bot"));
 	        botCommands.addAll(fetchMenuCommands()); // ✅ Fetch menu commands dynamically
@@ -739,8 +981,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	        List<FetchMidDataResponse> responses = apiCallerService.fetchMid(token);
 
 	        if (responses.isEmpty()) {
-	            sendMessage(chatId, "⚠️ No MID data found.");
-	            logger.warn("No MID data found for token: {}", token);
+				sendMessage(chatId, "⚠️ Your Token is Expired. Please Enter /start Command.");
+				logger.warn("No MID data found for token: {}", responses);
 	            return;
 	        }
 
@@ -781,7 +1023,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	        logger.info("Processing withdrawal request for chatId: {}", chatId);
 	        Object responseData = apiCallerService.callApi(token);
 
-	        if (responseData.toString().equals("401")) {
+			logger.info("Processing withdrawal request for chatId: {}", responseData);
+	        if (responseData.toString().equals("500")) {
 	            sendMessage(chatId, "⚠️ Your Token is Expired. Please Enter /start Command.");
 	            logger.warn("Token expired for chatId: {}", chatId);
 	        } else {
@@ -928,22 +1171,56 @@ public class TelegramBotService extends TelegramLongPollingBot {
 	}
 
 
+	public void sendPhoto(String chatId, MultipartFile file, String caption) {
+		try {
+			String url = "https://api.telegram.org/bot" + botToken + "/sendPhoto";
+			MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+			body.add("chat_id", chatId);
+			body.add("photo", new MultipartFileResource(file));
+			body.add("caption", caption); // Add caption here
 
-	// ✅ Load Merchant Group IDs from Database
-	// public void loadTelelgramMerchantGroup() {
-//	     List<MerchantGroup> merchantGroups = merchantGroupRepository.findAll();
-//	     merchantGroupIds.clear();
-//	     for (MerchantGroup group : merchantGroups) {
-//	         merchantGroupIds.add(group.getChatId());
-//	     }
-//	     logger.info("✅ Merchant Groups Updated: {}", merchantGroupIds);
-	// }
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-	// ✅ Initialize Group IDs on Startup
-	// @PostConstruct
-	// public void init() {
-//	     loadAdminGroupIdsFromDB();
-//	     loadMerchantGroupIdsFromDB();
-	// }
-	
+			HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
+			new RestTemplate().postForEntity(url, request, String.class);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to send photo to Telegram", e);
+		}
+	}
+
+	public void sendDocument(String chatId, MultipartFile file, String caption) {
+		try {
+			String url = "https://api.telegram.org/bot" + botToken + "/sendDocument";
+			MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+			body.add("chat_id", chatId);
+			body.add("document", new MultipartFileResource(file));
+			body.add("caption", caption); // Add caption here
+
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+			HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
+			new RestTemplate().postForEntity(url, request, String.class);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to send document to Telegram", e);
+		}
+	}
+
+	public void sendReplyMessage(String chatId, String text, Integer replyToMessageId) {
+		String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+
+		Map<String, Object> body = new HashMap<>();
+		body.put("chat_id", chatId);
+		body.put("text", text);
+		body.put("reply_to_message_id", replyToMessageId);
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+
+		HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+		new RestTemplate().postForEntity(url, request, String.class);
+	}
+
 }
